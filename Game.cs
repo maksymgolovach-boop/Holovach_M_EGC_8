@@ -30,6 +30,9 @@ public class Game : GameWindow
     private double _secondTimer;
     private int _frames, _lastFrames;
     private bool _titleDirty = true;
+    private float baseMoveSpeed = 2.0f;    // units per second
+    private float baseRotateSpeed = 90.0f; // degrees per second
+    private float baseScaleSpeed = 1.0f;   // scale factor per second
 
     public Game(int width, int height, string title)
         : base(GameWindowSettings.Default,
@@ -103,11 +106,12 @@ public class Game : GameWindow
         float dt = (float)args.Time;
         SceneObject sel = _scene[_selected];
 
-        const float moveSpeed = 2.0f;   // unități de lume pe secundă
-        if (KeyboardState.IsKeyDown(Keys.Left))  sel.Transform.Position.X -= moveSpeed * dt;
-        if (KeyboardState.IsKeyDown(Keys.Right)) sel.Transform.Position.X += moveSpeed * dt;
-        if (KeyboardState.IsKeyDown(Keys.Down))  sel.Transform.Position.Y -= moveSpeed * dt;
-        if (KeyboardState.IsKeyDown(Keys.Up))    sel.Transform.Position.Y += moveSpeed * dt;
+        float multiplier = (KeyboardState.IsKeyDown(Keys.LeftShift) ) ? 3.0f : 1.0f;
+
+        if (KeyboardState.IsKeyDown(Keys.Left))  sel.Transform.Position.X -= baseMoveSpeed * multiplier * dt;
+        if (KeyboardState.IsKeyDown(Keys.Right)) sel.Transform.Position.X += baseMoveSpeed * multiplier * dt;
+        if (KeyboardState.IsKeyDown(Keys.Down))  sel.Transform.Position.Y -= baseMoveSpeed * multiplier * dt;
+        if (KeyboardState.IsKeyDown(Keys.Up))    sel.Transform.Position.Y += baseMoveSpeed * multiplier * dt;
 
         // TODO (T2): Q / E rotesc obiectul, Z / X îl scalează
 
@@ -122,16 +126,22 @@ public class Game : GameWindow
             _titleDirty = true;
         }
 
-        if(KeyboardState.IsKeyDown(Keys.E)) sel.Transform.Rotation += 90 * dt;
-        if (KeyboardState.IsKeyDown(Keys.Q)) sel.Transform.Rotation -= 90 * dt;
-        if(KeyboardState.IsKeyDown(Keys.Z)) sel.Transform.Scale += new Vector2(1.5f, 1.5f) * dt;
-        if (KeyboardState.IsKeyDown(Keys.X)) sel.Transform.Scale -= new Vector2(1.5f, 1.5f) * dt;
-
+        if(KeyboardState.IsKeyDown(Keys.E)) sel.Transform.Rotation -= baseRotateSpeed * multiplier * dt;
+        if(KeyboardState.IsKeyDown(Keys.Q)) sel.Transform.Rotation += baseRotateSpeed * multiplier * dt;
+        if(KeyboardState.IsKeyDown(Keys.Z)) sel.Transform.Scale += new Vector2(baseScaleSpeed, baseScaleSpeed) * multiplier * dt;
+        if (KeyboardState.IsKeyDown(Keys.X)) sel.Transform.Scale -= new Vector2(baseScaleSpeed, baseScaleSpeed) * multiplier * dt;
 
         // --- Obiectul selectat: mouse-ul (secțiunea 9) -------------------------------
 
         // TODO (T3): la clic stânga, obiectul selectat se mută în punctul din lume aflat sub cursor
         //            (folosiți ScreenToWorld; Depth nu se schimbă)
+
+        if(MouseState.IsButtonDown(MouseButton.Left))
+        {
+            Vector2 mousePos = new Vector2(MouseState.X, MouseState.Y);
+            Vector2 worldPos = ScreenToWorld(mousePos);
+            sel.Transform.Position = worldPos;
+        }
 
 
         // TODO (T4, facultativ): clic dreapta = pivot; tasta P ținută = rotație în jurul pivotului
@@ -214,7 +224,19 @@ public class Game : GameWindow
     private Vector2 ScreenToWorld(Vector2 mousePixels)
     {
         // TODO (T3): pasul 1 (pixel → NDC), apoi pasul 2 (NDC → lume, cu inversa lui view * projection)
-        return Vector2.Zero;
+        int width = ClientSize.X;
+        int height = ClientSize.Y;
+
+        float x_ndc = (2.0f * mousePixels.X) / width - 1.0f;
+        float y_ndc = 1.0f - (2.0f * mousePixels.Y)/height;
+
+        Matrix4 TransformMatrix = _camera.ViewMatrix * _camera.ProjectionMatrix;
+        TransformMatrix = TransformMatrix.Inverted();   
+
+        Vector4 ndcPoint = new Vector4(x_ndc, y_ndc, 0.0f, 1.0f);
+        Vector4 worldPoint = Vector4.TransformRow(ndcPoint, TransformMatrix);
+
+        return new Vector2(worldPoint.X/worldPoint.W, worldPoint.Y/worldPoint.W);
     }
 
     /// <summary>Tasta R: obiectele revin la transformările inițiale, camera la starea inițială.</summary>
